@@ -30,25 +30,33 @@
 -->
 
 <mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
-           backgroundColor="#DDDDDD" x='0' y='0' width="150" cornerRadius="6"
-           horizontalScrollPolicy="off" verticalScrollPolicy="off"
-           borderStyle="solid" borderThickness="3" borderColor="#CCCCCC"
-           creationComplete="init()">
+		   x="0" y="0" width="150" height="100" borderStyle="none" creationComplete="init()"
+		   horizontalScrollPolicy="off" verticalScrollPolicy="off">
+	
+	
 
+	
+	
   <mx:Style>
     .ilacSlider { thumbSkin: Embed(source="skins/empty.gif"); }
   </mx:Style>
+	
+	<mx:Metadata>
+		[Event(name="change", type="mx.events.ColorPickerEvent")]
+	</mx:Metadata>
 
   <mx:Script><![CDATA[
-    import mx.styles.StyleManager;
-    import mx.events.ColorPickerEvent;
-    import mx.controls.TextInput;
-    import flash.geom.Point;
-    import com.thenduks.ilac.skins.*;
+    
     import com.thenduks.ilac.IlacUtil;
-
-    private static const DEFAULT_SATURATION:Number = 1.45;
-    private static const DEFAULT_BRIGHTNESS:Number = -20;
+    import com.thenduks.ilac.skins.*;
+    
+    import flash.geom.Point;
+    
+    import mx.controls.TextInput;
+    import mx.events.ColorPickerEvent;
+    import mx.styles.StyleManager;
+    private static const DEFAULT_SATURATION:Number = 1;
+    private static const DEFAULT_BRIGHTNESS:Number = 0;
 
     private var colorWheel:Wheel;
     private var colorWheelStatic:Wheel;
@@ -56,23 +64,25 @@
     private var bmdStatic:BitmapData;
     private var cm:ColorMatrix;
     private var radius:Number;
-
+	public var currentColor:uint; //The color chosen from the wheel, or set by selectedColor function.
     public function position( pos:Point ):void {
       x = pos.x;
       y = pos.y;
     }
 
     public function set selection( xy:Point ):void {
-      getColor( xy.x, xy.y );
+      setCurrentcolor( xy.x, xy.y );
 
-      colorPointer.move( xy.x + colorPointer.width / 2,
-                         xy.y + colorPointer.height / 2 );
+      colorPointer.move( xy.x - colorPointer.width / 2,
+                         xy.y - colorPointer.height / 2 );
       colorPointer.visible = true;
-      updateSaturationSlider();
+	 
+      updateBrightnessSlider();
     }
+	  
     public function get selection():Point {
       if( colorPointer.visible ) {
-        return new Point( colorPointer.x, colorPointer.y );
+        return new Point( colorPointer.x + colorPointer.width / 2, colorPointer.y + colorPointer.width / 2);
       }
       else {
         return new Point( -1, -1 );
@@ -89,6 +99,7 @@
     }
 
     private function init():void {
+		
       colorWheelStatic = new Wheel();
       draw( colorWheelStatic );
       var cStatic:ColorMatrix = new ColorMatrix();
@@ -109,7 +120,8 @@
       colorWheel.addEventListener( MouseEvent.MOUSE_DOWN, mouseHandler );
       colorWheel.addEventListener( MouseEvent.MOUSE_MOVE, mouseHandler );
 
-      setFilters();
+
+	  updateBrightnessSlider();
     }
 
     private function mouseHandler( event:MouseEvent ):void {
@@ -117,34 +129,31 @@
       colorPointer.visible = true;
       var x:Number = event.localX;
       var y:Number = event.localY;
-      colorPointer.move( x + colorPointer.width / 2,
-                         y + colorPointer.height / 2 );
-      getColor( x, y );
-      updateSaturationSlider();
+      colorPointer.move( x - colorPointer.width / 2,
+                         y - colorPointer.height / 2 );
+      setCurrentcolor( x, y );
+      updateBrightnessSlider();
+	  setFilters();
+	  
+	  dispatchEvent( new ColorPickerEvent( 'change', false,
+		  false, -1, currentColor ) );
     }
 
-    private function getColor( x:Number, y:Number ):void {
-      var color:Number = bmd.getPixel( x, y );
+    private function setCurrentcolor( x:Number, y:Number ):void {
+      var color:Number = colorWheel.getColor(x,y,brightnessSlider.value);
       if( !atArea( x, y ) ) { return; }
-      cm = new ColorMatrix();
-      cm.colorize( color );
-      cm.adjustSaturation( saturationSlider.value );
-      cm.adjustBrightness( brightnessSlider.value );
-      dispatchEvent( new ColorPickerEvent( 'change', false,
-                                           false, -1, color ) );
+	  currentColor = color;
     }
 
-    private function updateSaturationSlider():void {
-      var rightSide:Number = bmdStatic.getPixel( colorPointer.x,
-                                                 colorPointer.y );
-
-      var newColors:Array = IlacUtil.stringAsArray(
-        saturationSlider.getStyle( 'fillColors' )
-      );
-
-      saturationSlider.setStyle( 'fillColors',
-                                 '[' + newColors[0] + ',' +
-                                       rightSide + ']' );
+    private function updateBrightnessSlider():void {
+		var c:ColorMatrix = new ColorMatrix();
+		var hsv:Array = ColorUtil.RGBtoHSV(currentColor);
+		var brightness:Number = hsv[2];
+		var brightestColor:uint = ColorUtil.toRGBint(ColorUtil.HSVtoRGB(hsv[0], hsv[1], 1));
+		brightnessSlider.setStyle( 'fillColors',
+			'[' +0 + ',' +
+			brightestColor + ']' );
+		brightnessSlider.value = brightness;
     }
 
     private function saturation():void {
@@ -153,7 +162,7 @@
       colorWheel.filters = [c.filter];
       bmd = new BitmapData( colorWheel.width, colorWheel.height );
       bmd.draw( colorWheel );
-      getColor( colorPointer.x, colorPointer.y );
+      setCurrentcolor( colorPointer.x, colorPointer.y );
     }
 
     private function brightness():void {
@@ -162,17 +171,16 @@
       colorWheel.filters = [c.filter];
       bmd = new BitmapData( colorWheel.width, colorWheel.height );
       bmd.draw( colorWheel );
-      getColor( colorPointer.x, colorPointer.y );
+      setCurrentcolor( colorPointer.x, colorPointer.y );
     }
 
     private function setFilters():void {
       var c:ColorMatrix = new ColorMatrix();
       c.adjustSaturation( saturationSlider.value );
-      c.adjustBrightness( brightnessSlider.value );
+      c.adjustBrightness(brightnessSlider.value * 256 - 256);
       colorWheel.filters = [c.filter];
       bmd = new BitmapData( colorWheel.width, colorWheel.height );
       bmd.draw( colorWheel );
-      getColor( colorPointer.x, colorPointer.y );
     }
 
     private function atArea( _x:Number, _y:Number ):Boolean {
@@ -181,43 +189,72 @@
       return Math.sqrt( x * x + y * y ) < radius;
     }
 
-    private function colorWheelHolderWidth():Number {
-      return this.width - colorWheelHolder.x - colorWheelHolder.y -
-             (this.getStyle('borderThickness') * 2);
-    }
+	  
+	private function sliderChanged(e:Event = null):void{
+		var c:ColorMatrix = new ColorMatrix();
+		c.adjustSaturation( saturationSlider.value );
+		c.adjustBrightness(brightnessSlider.value * 256 - 256);
+		
+		var hsv:Array = ColorUtil.RGBtoHSV(currentColor);
+		var brightness:Number = hsv[2];
+		var brightestColor:uint = ColorUtil.toRGBint(ColorUtil.HSVtoRGB(hsv[0], hsv[1], 1));
+
+		var color:uint = c.applyToColor(brightestColor);
+		setFilters();
+		dispatchEvent( new ColorPickerEvent( 'change', false,
+		 false, -1, color ) );
+	}
+	  
+	  public function set selectedColor(color:Number):void
+	  {
+		  currentColor = color;
+
+		  var pos:Point = colorWheel.getPos(color);
+		  colorPointer.move( pos.x - colorPointer.width / 2,
+		  pos.y - colorPointer.height / 2 );
+		  colorPointer.visible = true;
+		 updateBrightnessSlider();
+		 setFilters();
+/*		 var c:ColorMatrix = new ColorMatrix();
+		  c.adjustBrightness(1 / brightness);
+		  currentColor = c.applyToColor(color);
+		  trace("currentcolor after: " + ColorUtil.toRGB(currentColor));
+		  brightnessSlider.setStyle( 'fillColors',
+			  '[' +0 + ',' +
+			  currentColor + ']' );
+		  
+		  brightnessSlider.value = brightness;
+		  trace("brightness" + brightness ); */
+	  }
+	  
+
   ]]></mx:Script>
-
-  <mx:Canvas  id="colorWheelHolder" resize="draw( colorWheel );"
-              x="5" y="5"
-              width="{colorWheelHolderWidth()}"
-              height="{colorWheelHolder.width}" />
-
-  <mx:HSlider id="saturationSlider"
-              minimum="0" maximum="2" snapInterval="0.01"
-              x="5" y="{colorWheelHolder.height + saturationSlider.height}"
-              showDataTip="false" liveDragging="true"
-              width="{colorWheelHolder.width}" height="20"
-              change="setFilters()"
-              styleName="ilacSlider"
-              fillColors="[0x000000, 0xEEEEEE]"
-              trackSkin="{HSliderSkin}"
-              sliderThumbClass="{SliderThumbSkin}"
-              creationComplete="{saturationSlider.value = DEFAULT_SATURATION}" />
-
-  <mx:HSlider id="brightnessSlider"
-              minimum="-255" maximum="255" snapInterval="1" x="5"
-              y="{colorWheelHolder.height + ( saturationSlider.height * 2 )}"
-              showDataTip="false" liveDragging="true"
-              width="{colorWheelHolder.width}" height="30"
-              change="setFilters()"
-              styleName="ilacSlider"
-              fillColors="[0x000000, 0xFFFFFF]"
-              trackSkin="{HSliderSkin}"
-              sliderThumbClass="{SliderThumbSkin}"
-              creationComplete="{brightnessSlider.value = DEFAULT_BRIGHTNESS}" />
-
-  <mx:Canvas  id="colorPointer" width="4" height="4" visible='false'
-              borderStyle="solid" borderColor="#363636"
-              mouseEnabled="false" />
+	<mx:VBox left="10" right="10" horizontalAlign="center" verticalGap="10">
+		
+	<mx:Canvas width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+	  <mx:Canvas id="colorWheelHolder" width="100%" height="{colorWheelHolder.width}"
+				 horizontalScrollPolicy="off" resize="draw( colorWheel );"
+				 verticalScrollPolicy="off"/>
+		 
+		<mx:Canvas id="colorPointer" visible="false" width="4" height="4" borderColor="#363636"
+				   borderStyle="solid" mouseEnabled="false"/>
+	  </mx:Canvas>
+		
+	  <mx:HSlider id="saturationSlider" visible="false" width="90%" height="20"
+				  change="sliderChanged()"
+				  creationComplete="{saturationSlider.value = DEFAULT_SATURATION}"
+				  liveDragging="true" maximum="1" minimum="0" showDataTip="false"
+				  sliderThumbClass="{SliderThumbSkin}" snapInterval="0.01" styleName="ilacSlider"
+				  trackSkin="{HSliderSkin}">
+	  		
+	  </mx:HSlider>
+	
+	  <mx:HSlider id="brightnessSlider" visible="true" width="90%" height="30" change="sliderChanged()"
+				  creationComplete="{brightnessSlider.value = DEFAULT_BRIGHTNESS}"
+				  liveDragging="true" maximum="1" minimum="0" showDataTip="false"
+				  sliderThumbClass="{SliderThumbSkin}" snapInterval="0.01" styleName="ilacSlider"
+				  trackSkin="{HSliderSkin}"/>
+	</mx:VBox>
+	
 </mx:Canvas>
 

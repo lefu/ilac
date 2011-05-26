@@ -1,5 +1,7 @@
 Change Log
 ==========
+v0.2
+Changes by Lean Fuglsang, to use a correct HSV wheel. Also, the pointer can now be set by the application.
 
 v0.1
 ----

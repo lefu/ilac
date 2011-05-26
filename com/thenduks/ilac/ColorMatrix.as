@@ -29,7 +29,12 @@ THE SOFTWARE.
 */
 
 package com.thenduks.ilac {
+  import flash.display.BitmapData;
   import flash.filters.ColorMatrixFilter;
+  import flash.geom.Point;
+  import flash.geom.Rectangle;
+  
+  import mx.controls.Image;
 
   public class ColorMatrix {
     // RGB to Luminance conversion constants as found on
@@ -176,6 +181,14 @@ package com.thenduks.ilac {
     public function get filter():ColorMatrixFilter {
       return new ColorMatrixFilter( matrix );
     }
+	
+	public function applyToColor(color:uint):uint{
+		var img:BitmapData = new BitmapData(1,1,false,color);
+		
+		img.applyFilter(img, new Rectangle(0,0,1,1), new Point(0,0), filter);
+		
+		return img.getPixel(0,0);
+	}
 
     public function concat( mat:Array ):void {
       var temp:Array = [];

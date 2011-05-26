@@ -1,3 +1,6 @@
+Forked of project, original readme below.
+
+
 Ilac v0.1 - Flex 3 Color Wheel
 ==============================
 
